@@ -1,13 +1,4 @@
 from http.server import SimpleHTTPRequestHandler, HTTPServer
-
-def run():
-    server_address = ('', 8000)
-    httpd = HTTPServer(server_address, SimpleHTTPRequestHandler)
-    print('Serveur démarré sur http://localhost:8000')
-    httpd.serve_forever()
-
-if __name__ == '__main__':
-    run()from http.server import SimpleHTTPRequestHandler, HTTPServer
 import os
 
 class RequestHandler(SimpleHTTPRequestHandler):
