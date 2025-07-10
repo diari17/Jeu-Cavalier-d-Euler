@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jeu du Cavalier d'Euler</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Jeu du Cavalier d'Euler</h1>
+        
+        <div class="controls">
+            <label for="board-size">Taille :</label>
+            <select id="board-size">
+                <option value="5">5x5</option>
+                <option value="6">6x6</option>
+                <option value="7">7x7</option>
+                <option value="8">8x8</option>
+            </select>
+            
+            <button id="new-game-btn">Nouvelle partie</button>
+            <button id="hint-btn">Indice</button>
+            <button id="undo-btn">Annuler</button>
+        </div>
+        
+        <div id="game-info">
+            <span id="timer">Temps: 0s</span>
+            <span id="status">Cliquez sur "Nouvelle partie"</span>
+        </div>
+        
+        <div id="board-container"></div>
+        
+        <div class="instructions">
+            <h3>Règles :</h3>
+            <ul>
+                <li>Déplacez le cavalier (♞) en L sur toutes les cases sans repasser</li>
+                <li><span class="visited-demo"></span> Visitée</li>
+                <li><span class="possible-demo"></span> Mouvement possible</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let currentPosition = null;
+        let visited = [];
+        let boardSize = 5;
+        let moveCount = 0;
+        let moveHistory = [];
+        let startTime, timerInterval;
+
+        // Initialisation
+        document.getElementById('new-game-btn').addEventListener('click', startNewGame);
+        document.getElementById('hint-btn').addEventListener('click', showHint);
+        document.getElementById('undo-btn').addEventListener('click', undoMove);
+        document.getElementById('board-size').addEventListener('change', () => {
+            boardSize = parseInt(document.getElementById('board-size').value);
+            startNewGame();
+        });
+
+        function startNewGame() {
+            boardSize = parseInt(document.getElementById('board-size').value);
+            const startX = Math.floor(Math.random() * boardSize);
+            const startY = Math.floor(Math.random() * boardSize);
+            
+            currentPosition = [startX, startY];
+            visited = Array(boardSize).fill().map(() => Array(boardSize).fill(false));
+            visited[startX][startY] = true;
+            moveCount = 1;
+            moveHistory = [{x: startX, y: startY, moveNumber: 1}];
+            
+            createBoard();
+            updateBoard();
+            startTimer();
+            updateStatus(`Départ : (${startX}, ${startY})`);
+        }
+
+        function createBoard() {
+            const boardContainer = document.getElementById('board-container');
+            boardContainer.innerHTML = '';
+            boardContainer.style.gridTemplateColumns = `repeat(${boardSize}, 60px)`;
+            
+            for (let y = 0; y < boardSize; y++) {
+                for (let x = 0; x < boardSize; x++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.x = x;
+                    cell.dataset.y = y;
+                    cell.addEventListener('click', () => handleCellClick(x, y));
+                    boardContainer.appendChild(cell);
+                }
+            }
+        }
+
+        function handleCellClick(x, y) {
+            if (!currentPosition) return;
+            
+            const [currentX, currentY] = currentPosition;
+            
+            if (isValidKnightMove(currentX, currentY, x, y)) {
+                if (!visited[x][y]) {
+                    visited[x][y] = true;
+                    currentPosition = [x, y];
+                    moveCount++;
+                    moveHistory.push({x, y, moveNumber: moveCount});
+                    
+                    updateBoard();
+                    
+                    if (moveCount === boardSize * boardSize) {
+                        clearInterval(timerInterval);
+                        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                        updateStatus(`Victoire en ${moveCount} coups et ${elapsed}s !`);
+                        celebrate();
+                    } else {
+                        updateStatus(`Mouvement ${moveCount}/${boardSize*boardSize}`);
+                    }
+                } else {
+                    updateStatus("Case déjà visitée !");
+                }
+            } else if (x !== currentX || y !== currentY) {
+                updateStatus("Mouvement invalide !");
+            }
+        }
+
+        function isValidKnightMove(fromX, fromY, toX, toY) {
+            const dx = Math.abs(toX - fromX);
+            const dy = Math.abs(toY - fromY);
+            return (dx === 2 && dy === 1) || (dx === 1 && dy === 2);
+        }
+
+        function updateBoard() {
+            const [currentX, currentY] = currentPosition;
+            
+            document.querySelectorAll('.cell').forEach(cell => {
+                const x = parseInt(cell.dataset.x);
+                const y = parseInt(cell.dataset.y);
+                
+                cell.innerHTML = '';
+                cell.className = 'cell';
+                
+                if (x === currentX && y === currentY) {
+                    cell.classList.add('current');
+                    cell.innerHTML = '♞';
+                } else if (visited[x][y]) {
+                    cell.classList.add('visited');
+                    cell.textContent = getMoveNumber(x, y);
+                } else if (isValidKnightMove(currentX, currentY, x, y)) {
+                    cell.classList.add('possible-move');
+                }
+            });
+        }
+
+        function getMoveNumber(x, y) {
+            const move = moveHistory.find(m => m.x === x && m.y === y);
+            return move ? move.moveNumber : '';
+        }
+
+        function showHint() {
+            const [x, y] = currentPosition;
+            const possibleMoves = [];
+            
+            // Trouver les mouvements possibles
+            const moves = [
+                [x+2, y+1], [x+2, y-1], [x-2, y+1], [x-2, y-1],
+                [x+1, y+2], [x-1, y+2], [x+1, y-2], [x-1, y-2]
+            ];
+            
+            for (const [nx, ny] of moves) {
+                if (nx >= 0 && nx < boardSize && ny >= 0 && ny < boardSize && !visited[nx][ny]) {
+                    possibleMoves.push([nx, ny]);
+                }
+            }
+            
+            if (possibleMoves.length > 0) {
+                const [hintX, hintY] = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+                highlightCell(hintX, hintY);
+                updateStatus(`Indice : (${hintX}, ${hintY})`);
+            } else {
+                updateStatus("Aucun mouvement possible !");
+            }
+        }
+
+        function highlightCell(x, y) {
+            document.querySelectorAll('.cell').forEach(cell => {
+                cell.classList.remove('hint');
+                if (parseInt(cell.dataset.x) === x && parseInt(cell.dataset.y) === y) {
+                    cell.classList.add('hint');
+                }
+            });
+        }
+
+        function undoMove() {
+            if (moveHistory.length <= 1) return;
+            
+            moveHistory.pop();
+            const lastMove = moveHistory[moveHistory.length - 1];
+            currentPosition = [lastMove.x, lastMove.y];
+            moveCount--;
+            
+            // Réinitialiser les cases visitées
+            visited = Array(boardSize).fill().map(() => Array(boardSize).fill(false));
+            moveHistory.forEach(move => visited[move.x][move.y] = true);
+            
+            updateBoard();
+            updateStatus(`Annulé - Mouvement ${moveCount}/${boardSize*boardSize}`);
+        }
+
+        function startTimer() {
+            startTime = Date.now();
+            clearInterval(timerInterval);
+            timerInterval = setInterval(updateTimer, 1000);
+        }
+
+        function updateTimer() {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            document.getElementById('timer').textContent = `Temps: ${elapsed}s`;
+        }
+
+        function updateStatus(message) {
+            document.getElementById('status').textContent = message;
+        }
+
+        function celebrate() {
+            const board = document.getElementById('board-container');
+            for (let i = 0; i < 30; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                confetti.style.left = Math.random() * 100 + '%';
+                confetti.style.backgroundColor = `hsl(${Math.random() * 360}, 100%, 50%)`;
+                board.appendChild(confetti);
+            }
+        }
+
+        // Démarrer le jeu
+        startNewGame();
+    </script>
+</body>
+</html>
